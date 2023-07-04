@@ -4,7 +4,7 @@ const traverse = require("@babel/traverse").default
 const fs = require("fs")
 const babel = require("@babel/core")
 
-let file = fs.readFileSync("obfuscated2.js", "utf-8")
+let file = fs.readFileSync("obfuscated.js", "utf-8")
 
 const ast = babel.parseSync(file)
 
@@ -114,7 +114,6 @@ function get_value(a, b) {
     return decrypt(nFirst[0] + shuffle_offset, nFirst[1])
 }
 
-console.log(long_list)
 // do reshuffle
 while (true) {
     try {
@@ -177,12 +176,15 @@ traverse(ast, {
         if (Object.keys(offset_table).includes(name)) {
             if (path.node.arguments.length == 2 && path.node.arguments[0].value != undefined) {
                 let values = numbersFirst(path.node.arguments.map(v=>v.value ? v.value : -v.argument.value))
-                path.replaceWith(types.stringLiteral(getValueWithOffset(values[0], values[1], offset_table[name])))
+                try {
+                    path.replaceWith(types.stringLiteral(getValueWithOffset(values[0], values[1], offset_table[name])))
+                } catch {
+
+                }
             }
         }
     }
 })
-
 let operator_functions = {}
 
 // below is the collection of the names of operator functions (short functions that eg. add two numbers together)
@@ -225,7 +227,6 @@ traverse(ast, {
 let checksum_indexes = []
 let checksum_constant = 0;
 let literals = Object.values(operator_functions).filter(f=>f.startsWith("LITERAL")).map(r=>r.split("_")[1])
-console.log(literals)
 let static_param = literals.filter(l=>l.length == 32)[0]
 let start = literals.filter(l=>l.length == 4)[0]
 let end;
