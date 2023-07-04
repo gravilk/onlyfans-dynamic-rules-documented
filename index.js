@@ -4,7 +4,7 @@ const traverse = require("@babel/traverse").default
 const fs = require("fs")
 const babel = require("@babel/core")
 
-let file = fs.readFileSync("obfuscated.js", "utf-8")
+let file = fs.readFileSync("obfuscated2.js", "utf-8")
 
 const ast = babel.parseSync(file)
 
@@ -68,7 +68,7 @@ traverse(ast, {
     // get control value required to unshuffle the large string list
     CallExpression(path) {
         if (path.node.arguments[1]?.type === "NumericLiteral") {
-            if (path.node.arguments[1].value > 1000) {
+            if (path.node.arguments[1].value > 10000) {
                 control_value = path.node.arguments[1].value
             }
         }
@@ -110,9 +110,11 @@ traverse(ast, {
 
 // get string. only for the shuffle part of the process. the other offsets are managed in the function getValueWithOffset
 function get_value(a, b) {
-    return decrypt(b + shuffle_offset, a)
+    let nFirst = numbersFirst([a, b])
+    return decrypt(nFirst[0] + shuffle_offset, nFirst[1])
 }
 
+console.log(long_list)
 // do reshuffle
 while (true) {
     try {
@@ -223,9 +225,10 @@ traverse(ast, {
 let checksum_indexes = []
 let checksum_constant = 0;
 let literals = Object.values(operator_functions).filter(f=>f.startsWith("LITERAL")).map(r=>r.split("_")[1])
+console.log(literals)
 let static_param = literals.filter(l=>l.length == 32)[0]
 let start = literals.filter(l=>l.length == 4)[0]
-let end = literals.filter(l=>l.length == 8)[0]
+let end;
 
 traverse(ast, {
     ReturnStatement(path) {
@@ -245,6 +248,18 @@ traverse(ast, {
                         }
                     }
                 })
+            }
+        }
+    },
+    CallExpression(path) {
+        if (path.node.callee.type === "MemberExpression") {
+            if (path.node.callee.property.value === "join" && path.node.arguments[0].value === ":") {
+                let obj = path.node.callee.object.elements.slice(-1)[0]
+                if (obj.type === "MemberExpression") {
+                    end = literals.filter(l=>l.length == 8)[0]
+                } else {
+                    end = obj.value
+                }
             }
         }
     }
