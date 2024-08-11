@@ -1,6 +1,6 @@
 # OnlyFans dynamic rules documented & solved
 This repository contains files that will make the creation of OnlyFans easier, if not create them right away.
-This tool worked on **7/3/2023** on the file `obfuscated.js`. It is likely that something in the script has changed since then.
+This tool worked on **2024-08-11** on the file `obfuscated.js`. It is likely that something in the script has changed since then.
 
 ### Warning
 Trying to "fix" this project while not understanding the inner workings of the OnlyFans script might be a waste of your time. Consider alternative projects or ready-to-use already generated rules.
@@ -15,4 +15,4 @@ There is no fingerprints involved in this. At least not until you want to create
 
 ## How to try this and continue development?
 To try this, you just have to download the latest script from OnlyFans (you can usually find it by searching for `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` in the DevTools),
-put it in the obfuscated.js file and run `node index.js`. How to continue development? Don't.
+put it in the obfuscated.js file and run `node index.js`. Do you want to continue development? Yeah, please 🙃
