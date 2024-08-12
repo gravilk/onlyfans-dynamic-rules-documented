@@ -94,8 +94,13 @@ traverse(ast, {
                     innerPath.stop()
                 }
             })
-            path.replaceWith(types.functionDeclaration(null, path.node.params, path.node.body))
+
+            const oldDecryptFunc = path.node
+
+            path.replaceWith(types.functionDeclaration(null, path.node.params, path.node.body)) // anonymous func
             decryptFunc = `(${generate(path.node).code})`
+            path.replaceWith(oldDecryptFunc)
+
             path.stop()
         }
     }
@@ -230,7 +235,7 @@ let literals = Object.values(operatorFunctions)
     .filter(operatorFunction => operatorFunction.startsWith("LITERAL"))
     .map(operatorFunction => operatorFunction.split("_")[1])
 let staticParam = literals.filter(literal => literal.length === 32)[0]
-let start = literals.filter(literal => literal.length === 5)[0]
+let start;
 let end;
 
 traverse(ast, {
@@ -257,18 +262,27 @@ traverse(ast, {
     CallExpression(path) {
         if (path.node.callee.type === "MemberExpression") {
             if (path.node.callee.property.value === "join" && path.node.arguments[0].value === ":") {
-                let obj = path.node.callee.object.elements.slice(-1)[0]
-                if (obj.type === "MemberExpression") {
+                const elements = path.node.callee.object.elements
+                const startElement = elements.slice(0, 1)[0]
+                const endElement = elements.slice(-1)[0]
+
+                if (startElement.type === 'MemberExpression') {
+                    start = literals.filter(literal => literal.length === 5)[0]
+                } else {
+                    start = startElement.value
+                }
+
+                if (endElement.type === "MemberExpression") {
                     end = literals.filter(l => l.length === 8)[0]
                 } else {
-                    end = obj.value
+                    end = endElement.value
                 }
             }
         }
     }
 })
 
-checksumIndexes = checksumIndexes.sort((a, b) => a - b) // ascending order
+checksumIndexes.sort((a, b) => a - b) // ascending order
 
 console.log(staticParam)
 console.log(start)
