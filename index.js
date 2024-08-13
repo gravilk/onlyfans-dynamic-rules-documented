@@ -234,7 +234,7 @@ let checksumConstant = 0;
 let literals = Object.values(operatorFunctions)
     .filter(operatorFunction => operatorFunction.startsWith("LITERAL"))
     .map(operatorFunction => operatorFunction.split("_")[1])
-let staticParam = literals.filter(literal => literal.length === 32)[0]
+let staticParam;
 let start;
 let end;
 
@@ -261,21 +261,32 @@ traverse(ast, {
     },
     CallExpression(path) {
         if (path.node.callee.type === "MemberExpression") {
-            if (path.node.callee.property.value === "join" && path.node.arguments[0].value === ":") {
-                const elements = path.node.callee.object.elements
-                const startElement = elements.slice(0, 1)[0]
-                const endElement = elements.slice(-1)[0]
+            if (path.node.callee.property.value === "join") {
+                if (path.node.arguments[0].value === ":") {
+                    const elements = path.node.callee.object.elements
+                    const startElement = elements.slice(0, 1)[0]
+                    const endElement = elements.slice(-1)[0]
 
-                if (startElement.type === 'MemberExpression') {
-                    start = literals.filter(literal => literal.length === 5)[0]
-                } else {
-                    start = startElement.value
-                }
+                    if (startElement.type === 'MemberExpression') {
+                        start = literals.filter(literal => literal.length === 5)[0]
+                    } else {
+                        start = startElement.value
+                    }
 
-                if (endElement.type === "MemberExpression") {
-                    end = literals.filter(l => l.length === 8)[0]
-                } else {
-                    end = endElement.value
+                    if (endElement.type === "MemberExpression") {
+                        end = literals.filter(literal => literal.length === 8)[0]
+                    } else {
+                        end = endElement.value
+                    }
+                } else if (path.node.arguments[0].value === "\n") {
+                    const elements = path.node.callee.object.elements
+                    const staticParamElement = elements.slice(0, 1)[0]
+
+                    if (staticParamElement.type === "MemberExpression") {
+                        staticParam = literals.filter(literal => literal.length === 32)[0]
+                    } else {
+                        staticParam = staticParamElement.value
+                    }
                 }
             }
         }
