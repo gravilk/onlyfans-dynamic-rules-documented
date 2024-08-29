@@ -1,0 +1,24 @@
+{
+  "name": "onlyfans-dynamic-rules-documented",
+  "version": "1.0.0",
+  "description": "This repository contains files that will make the creation of OnlyFans easier, if not create them right away. This tool worked on **7/3/2023** on the file `obfuscated.js`. It is likely that something in the script has changed since then.",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gravilk/onlyfans-dynamic-rules-documented.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gravilk/onlyfans-dynamic-rules-documented/issues"
+  },
+  "homepage": "https://github.com/gravilk/onlyfans-dynamic-rules-documented#readme",
+  "dependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/generator": "^7.25.0",
+    "@babel/traverse": "^7.25.3",
+    "@babel/types": "^7.25.2",
+    "babel": "^6.23.0"
+  }
+}

@@ -8,81 +8,100 @@ let file = fs.readFileSync("obfuscated.js", "utf-8")
 
 const ast = babel.parseSync(file)
 
-let long_list;
-let control_value;
-let to_evaluate;
-let shuffle_offset;
-let decryption_offset;
+let decryptFunc;
+let reshuffleStatement;
 
-// decryption function for the strings
-function decrypt(W, n) {
-    const t = long_list;
-    return e = function (n, o) {
-      n -= decryption_offset;
-      let c = t[n];
-      if (void 0 === e['jCUVaC']) {
-        var d = function (W) {
-          const n = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/=';
-          let t = '',
-          o = '';
-          for (let c, d, r = 0, u = 0; d = W['charAt'](u++); ~d && (c = r % 4 ? 64 * c + d : d, r++ % 4) ? t += String['fromCharCode'](255 & c >> ( - 2 * r & 6)) : 0) d = n['indexOf'](d);
-          for (let c = 0, d = t['length']; c < d; c++) o += '%' + ('00' + t['charCodeAt'](c) ['toString'](16)) ['slice']( - 2);
-          return decodeURIComponent(o)
-        };
-        const n = function (W, n) {
-          let t,
-          o,
-          c = [
-          ],
-          r = 0,
-          u = '';
-          for (W = d(W), o = 0; o < 256; o++) c[o] = o;
-          for (o = 0; o < 256; o++) r = (r + c[o] + n['charCodeAt'](o % n['length'])) % 256,
-          t = c[o],
-          c[o] = c[r],
-          c[r] = t;
-          o = 0,
-          r = 0;
-          for (let d = 0; d < W['length']; d++) o = (o + 1) % 256,
-          r = (r + c[o]) % 256,
-          t = c[o],
-          c[o] = c[r],
-          c[r] = t,
-          u += String['fromCharCode'](W['charCodeAt'](d) ^ c[(c[o] + c[r]) % 256]);
-          return u
-        };
-        e['FUIxLT'] = n,
-        W = arguments,
-        e['jCUVaC'] = !0
-      }
-      const r = t[0],
-      u = n + r,
-      k = W[u];
-      return k ? c = k : (void 0 === e['TZeHWD'] && (e['TZeHWD'] = !0), c = e['FUIxLT'](c, o), W[u] = c),
-      c
-    },
-    e(W, n)
-  }
+let shuffledList;
+let controlNumber;
+let shuffleOffset;
+
+// get string. only for the shuffle part of the process. the other offsets are managed in the function getValueWithOffset
+function get_value(a, b) {
+    let nFirst = numbersFirst([a, b])
+
+    return decrypt(nFirst[0] + shuffleOffset, nFirst[1])
+}
+
+function getValueWithOffset(integer, string, offset) {
+    return decrypt(integer + offset, string)
+}
+
+// sort the arguments so that the number always comes first
+function numbersFirst(args) {
+    return args.sort(function (a, b) {
+        if (typeof a === typeof b) {
+            if (typeof a === "number") {
+                return a - b;
+            } else {
+                return a.localeCompare(b);
+            }
+        } else {
+            return typeof a === "number" ? -1 : 1;
+        }
+    })
+}
+
+function decrypt(a, b) {
+    return eval(decryptFunc + `(${a}, '${b}')`)
+}
+
+function reshuffle() {
+    while (true) {
+        try {
+            if (eval(reshuffleStatement) === controlNumber) {
+                return;
+            }
+
+            shuffledList.push(shuffledList.shift())
+        } catch (e) {
+            shuffledList.push(shuffledList.shift())
+        }
+    }
+}
 
 traverse(ast, {
     // get control value required to unshuffle the large string list
     CallExpression(path) {
         if (path.node.arguments[1]?.type === "NumericLiteral") {
             if (path.node.arguments[1].value > 10000) {
-                control_value = path.node.arguments[1].value
+                controlNumber = path.node.arguments[1].value
+                path.stop()
             }
         }
     },
+})
+
+traverse(ast, {
     // get large string list
     ArrayExpression(path) {
         if (path.node.elements.length > 10) {
-            long_list = eval(generate(path.node).code)
+            shuffledList = eval(generate(path.node).code)
         }
-    },
-    // get main decryption function to get the main offset
-    AssignmentExpression(path) {
-        if (path.node.operator === "-=") {
-            decryption_offset = path.node.right.value
+    }
+})
+
+traverse(ast, {
+    // get decrypt function
+    FunctionDeclaration(path) {
+        if (path.node.params.length === 2 && path.node.body.body.length === 2) {
+            path.traverse({
+                VariableDeclarator(innerPath) {
+                    innerPath.traverse({
+                        CallExpression(innerPath) {
+                            innerPath.replaceWithSourceString(`shuffledList`)
+                        }
+                    })
+                    innerPath.stop()
+                }
+            })
+
+            const oldDecryptFunc = path.node
+
+            path.replaceWith(types.functionDeclaration(null, path.node.params, path.node.body)) // anonymous func
+            decryptFunc = `(${generate(path.node).code})`
+            path.replaceWith(oldDecryptFunc)
+
+            path.stop()
         }
     }
 })
@@ -91,115 +110,101 @@ traverse(ast, {
 traverse(ast, {
     CallExpression(path) {
         if (path.node.callee.name === "parseInt") {
-            to_evaluate = generate(path.getStatementParent().node.declarations[0].init).code.replaceAll(/parseInt\((.+?)\(/g, "parseInt(get_value(")
+            const ifStatement = path.getStatementParent().node
+            reshuffleStatement = generate(ifStatement.test.left).code.replaceAll(/parseInt\((.+?)\(/g, "parseInt(get_value(")
+
             path.getFunctionParent().traverse({
-                FunctionDeclaration(inner) {
-                    let offset = generate(inner.node.body.body[0].argument.arguments[0]).code
-                    let num = parseInt(offset.match(/\d+/)[0])
-                    if (offset.match(/\-/g).length == 1) {
-                        offset = -num
-                    } else {
-                        offset = num
+                FunctionDeclaration(innerPath) {
+                    const offsetCode = generate(innerPath.node.body.body[0].argument.arguments[0]).code
+
+                    let offset = parseInt(offsetCode.match(/\d+/)[0])
+                    if (offsetCode.match(/-/g).length === 1) {
+                        offset = -offset
                     }
-                    shuffle_offset = offset
+
+                    shuffleOffset = offset
                 }
             })
+
+            path.stop()
         }
     }
 })
 
-// get string. only for the shuffle part of the process. the other offsets are managed in the function getValueWithOffset
-function get_value(a, b) {
-    let nFirst = numbersFirst([a, b])
-    return decrypt(nFirst[0] + shuffle_offset, nFirst[1])
-}
+reshuffle()
 
-// do reshuffle
-while (true) {
-    try {
-        let evaled = eval(to_evaluate)
-        if (evaled === control_value) break;
-        long_list.push(long_list.shift())
-    } catch (e) {
-        long_list.push(long_list.shift())
-    }
-}
-
-
-let offset_table = {}
+let offsetTable = {}
 
 // save all offsets along with their names to an object while also respecting their parent offsets.
 // if you don't understand what that means please read into how the different getter functions relate to eachother (in the example script file)
 traverse(ast, {
-    FunctionDeclaration(path) {
-        if (path.node.body.body[0].type === "ReturnStatement") {
-            let arg = path.node.body.body[0].argument
-            let parent_offset = arg.callee.name
-            let offset_name = path.node.id.name
-            let correct_arg = arg.arguments.filter(a=>a.type !== "Identifier")[0]
-            let offset = generate(correct_arg).code
-            let num = parseInt(offset.match(/\d+/)[0])
-            if (offset.match(/\-/g).length == 1) {
-                offset = -num
-            } else {
-                offset = num
+    ArrowFunctionExpression(path) {
+        path.traverse({
+            FunctionDeclaration(innerPath) {
+                if (innerPath.node.body.body[0].type === "ReturnStatement") {
+                    const argument = innerPath.node.body.body[0].argument
+                    const parentOffset = argument.callee.name
+                    const offsetName = innerPath.node.id.name
+                    const correctArgument = argument.arguments.filter(arg => arg.type !== "Identifier")[0]
+                    const offsetCode = generate(correctArgument).code
+
+                    let offset = parseInt(offsetCode.match(/\d+/)[0])
+                    if (offsetCode.match(/-/g).length === 1) {
+                        offset = -offset
+                    }
+
+                    offsetTable[offsetName] = offsetTable[parentOffset]
+                        ? offsetTable[parentOffset] + offset
+                        : offset
+                }
             }
-            offset_table[offset_name] = offset_table[parent_offset] ? offset_table[parent_offset] + offset : offset
-        }
+        })
     }
 })
-
-// sort the arguments so that the number always comes first
-function numbersFirst(val) {
-    return val.sort(function(a, b) {
-        if (typeof a === typeof b) {
-          if (typeof a === "number") {
-            return a - b;
-          } else {
-            return a.localeCompare(b);
-          }
-        } else {
-          return typeof a === "number" ? -1 : 1;
-        }
-      })
-}
-
-function getValueWithOffset(integer, string, offset) {
-    return decrypt(integer + offset, string)
-}
-
 
 // replace every getter call with the actual string
 traverse(ast, {
-    CallExpression(path) {
-        let name = path.node.callee.name
-        if (Object.keys(offset_table).includes(name)) {
-            if (path.node.arguments.length == 2 && path.node.arguments[0].value != undefined) {
-                let values = numbersFirst(path.node.arguments.map(v=>v.value ? v.value : -v.argument.value))
-                try {
-                    path.replaceWith(types.stringLiteral(getValueWithOffset(values[0], values[1], offset_table[name])))
-                } catch {
+    ArrowFunctionExpression(path) {
+        path.traverse({
+            CallExpression(path) {
+                let name = path.node.callee.name
+                if (Object.keys(offsetTable).includes(name)) {
+                    if (path.node.arguments.length === 2) {
+                        let values = numbersFirst(path.node.arguments.map(argument => {
+                            if (argument.type === 'StringLiteral') {
+                                return argument.value
+                            } else if (argument.type === 'UnaryExpression' || argument.type === 'NumericLiteral') {
+                                return parseInt(generate(argument).code)
+                            }
+                        }))
 
+                        try {
+                            path.replaceWith(types.stringLiteral(getValueWithOffset(values[0], values[1], offsetTable[name])))
+                        } catch {
+                            // don't care about error
+                        }
+                    }
                 }
             }
-        }
+        })
     }
 })
-let operator_functions = {}
+
+let operatorFunctions = {}
 
 // below is the collection of the names of operator functions (short functions that eg. add two numbers together)
 traverse(ast, {
     ObjectExpression(path) {
         if (path.node.properties.length > 10) {
-            for (_property of path.node.properties) {
-                if (_property.value.type === "StringLiteral") {
-                    operator_functions[_property.key.name] = `LITERAL_${_property.value.value}`
-                } else if (_property.value.type === "FunctionExpression") {
-                    let arg = _property.value.body.body[0].argument
-                    if (arg.type === "BinaryExpression") {
-                        operator_functions[_property.key.name] = `OPERATION_${arg.operator}`
+            for (const property of path.node.properties) {
+                if (property.value.type === "StringLiteral") {
+                    operatorFunctions[property.key.name] = `LITERAL_${property.value.value}`
+                } else if (property.value.type === "FunctionExpression") {
+                    const argument = property.value.body.body[0].argument
+                    if (argument.type === "BinaryExpression") {
+                        operatorFunctions[property.key.name] = `OPERATION_${argument.operator}`
                     } else {
-                        operator_functions[_property.key.name] = `OPERATION_CALL`
+                        operatorFunctions[property.key.name] = `OPERATION_CALL`
                     }
                 }
             }
@@ -210,13 +215,13 @@ traverse(ast, {
 traverse(ast, {
     CallExpression(path) {
         if (path.node.callee.type === "MemberExpression") {
-            let prop_name = path.node.callee.property.value
-            if (Object.keys(operator_functions).includes(prop_name)) {
-                let opr = operator_functions[prop_name].split("_")
-                if (opr[0] === "OPERATION") {
-                    if (opr[1].length == 1) {
+            let propertyName = path.node.callee.property.value
+            if (Object.keys(operatorFunctions).includes(propertyName)) {
+                let operatorFunction = operatorFunctions[propertyName].split("_")
+                if (operatorFunction[0] === "OPERATION") {
+                    if (operatorFunction[1].length === 1) {
                         let args = path.node.arguments
-                        path.replaceWith(types.binaryExpression(opr[1], args[0], args[1]))
+                        path.replaceWith(types.binaryExpression(operatorFunction[1], args[0], args[1]))
                     }
                 }
             }
@@ -224,11 +229,13 @@ traverse(ast, {
     }
 })
 
-let checksum_indexes = []
-let checksum_constant = 0;
-let literals = Object.values(operator_functions).filter(f=>f.startsWith("LITERAL")).map(r=>r.split("_")[1])
-let static_param = literals.filter(l=>l.length == 32)[0]
-let start = literals.filter(l=>l.length == 4)[0]
+let checksumIndexes = []
+let checksumConstant = 0;
+let literals = Object.values(operatorFunctions)
+    .filter(operatorFunction => operatorFunction.startsWith("LITERAL"))
+    .map(operatorFunction => operatorFunction.split("_")[1])
+let staticParam;
+let start;
 let end;
 
 traverse(ast, {
@@ -240,12 +247,12 @@ traverse(ast, {
                         if (inner.node.right.type === "NumericLiteral") {
                             let val = inner.node.right.value;
                             if (inner.node.operator === "+") {
-                                checksum_constant += val;
+                                checksumConstant += val;
                             } else {
-                                checksum_constant -= val;
+                                checksumConstant -= val;
                             }
                         } else if (inner.node.left.type === "NumericLiteral") {
-                            checksum_indexes.push(inner.node.left.value % 40)
+                            checksumIndexes.push(inner.node.left.value % 40)
                         }
                     }
                 })
@@ -254,23 +261,42 @@ traverse(ast, {
     },
     CallExpression(path) {
         if (path.node.callee.type === "MemberExpression") {
-            if (path.node.callee.property.value === "join" && path.node.arguments[0].value === ":") {
-                let obj = path.node.callee.object.elements.slice(-1)[0]
-                if (obj.type === "MemberExpression") {
-                    end = literals.filter(l=>l.length == 8)[0]
-                } else {
-                    end = obj.value
+            if (path.node.callee.property.value === "join") {
+                if (path.node.arguments[0].value === ":") {
+                    const elements = path.node.callee.object.elements
+                    const startElement = elements.slice(0, 1)[0]
+                    const endElement = elements.slice(-1)[0]
+
+                    if (startElement.type === 'MemberExpression') {
+                        start = literals.filter(literal => literal.length === 5)[0]
+                    } else {
+                        start = startElement.value
+                    }
+
+                    if (endElement.type === "MemberExpression") {
+                        end = literals.filter(literal => literal.length === 8)[0]
+                    } else {
+                        end = endElement.value
+                    }
+                } else if (path.node.arguments[0].value === "\n") {
+                    const elements = path.node.callee.object.elements
+                    const staticParamElement = elements.slice(0, 1)[0]
+
+                    if (staticParamElement.type === "MemberExpression") {
+                        staticParam = literals.filter(literal => literal.length === 32)[0]
+                    } else {
+                        staticParam = staticParamElement.value
+                    }
                 }
             }
         }
     }
 })
 
-checksum_indexes = checksum_indexes.sort()
+checksumIndexes.sort((a, b) => a - b) // ascending order
 
-console.log(static_param)
+console.log(staticParam)
 console.log(start)
 console.log(end)
-console.log(checksum_constant)
-console.log(checksum_indexes)
-fs.writeFileSync("deobfuscated.js", generate(ast).code)
+console.log(checksumConstant)
+console.log(checksumIndexes)
